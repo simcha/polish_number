@@ -4,16 +4,16 @@ require "polish_number/version"
 
 module PolishNumber
   HUNDREDS = ['', 'sto ', 'dwieście ', 'trzysta ', 'czterysta ', 'pięćset ', 'sześćset ',
-    'siedemset ', 'osiemset ', 'dziewięćset ']
+              'siedemset ', 'osiemset ', 'dziewięćset ']
 
   TENS = ['', 'dziesięć ', 'dwadzieścia ', 'trzydzieści ', 'czterdzieści ', 'pięćdziesiąt ',
-    'sześćdziesiąt ', 'siedemdziesiąt ', 'osiemdziesiąt ', 'dziewięćdziesiąt ']
+          'sześćdziesiąt ', 'siedemdziesiąt ', 'osiemdziesiąt ', 'dziewięćdziesiąt ']
 
   TEENS = ['', 'jedenaście ', 'dwanaście ', 'trzynaście ', 'czternaście ', 'piętnaście ',
-    'szesnaście ', 'siedemnaście ', 'osiemnaście ', 'dziewiętnaście ']
+           'szesnaście ', 'siedemnaście ', 'osiemnaście ', 'dziewiętnaście ']
 
   UNITIES = ['', 'jeden ', 'dwa ', 'trzy ', 'cztery ', 'pięć ', 'sześć ', 'siedem ', 'osiem ',
-    'dziewięć ']
+             'dziewięć ']
 
   ZERO = 'zero'
 
@@ -39,6 +39,108 @@ module PolishNumber
     :SEK => { :one => 'korona', :few => 'korony', :many => 'koron', :gender => :she,
             :one_100 => 'öre', :few_100 => 'öre', :many_100 => 'öre', :gender_100 => :it}
   }
+
+  ORDINAL_MASCULINE_PERSONAL_EXCEPTION = ['zerowi', 'pierwsi', 'drudzy', 'trzeci', 'czwarci']
+
+  GENDERS = [:masculine, :feminine, :neuter, :masculine_personal, :non_masculine]
+
+  CASES = [:nominative, :genitive, :dative, :accusative, :instrumental, :locative, :vocative]
+
+  ORDINAL_TEENS_CORES = ["zerow",
+    "pierwsz",
+    "drugi",
+    "trzeci",
+    "czwart",
+    "piąt",
+    "szóst",
+    "siódm",
+    "ósm",
+    "dziewiąt",
+    "dziesiąt",
+    "jedenast",
+    "dwunast",
+    "trzynast",
+    "czternast",
+    "piętnast",
+    "szesnast",
+    "siedemnast",
+    "osiemnast",
+    "dziewiętnast"]
+
+  ORDINAL_TENS_CORES = [
+    "zerow",
+    "dziesiąt", # wiem, wiem że to nie będzie używane, ale ładniej wygląda w tablicy :-)
+    "dwudziest",
+    "trzydziest",
+    "czterdziest",
+    "pięćdziesiąt",
+    "sześćdziesiąt",
+    "siedemdziesiąt",
+    "osiemdziesiąt",
+    "dziewięćdziesiąt"]
+
+  ORDINAL_FLEX = {
+    nominative: {masculine: 'y',feminine: 'a',neuter: 'e', non_masculine: 'e'},
+    genitive:  {masculine: 'ego',feminine: 'ej',neuter: 'ego', masculine_personal: 'ych', non_masculine: 'ych'},
+    dative: {masculine: 'emu',feminine: 'ej',neuter: 'emu', masculine_personal: 'ym', non_masculine: 'ym'},
+    accusative: {masculine: 'ego',feminine: 'ą',neuter: 'e', masculine_personal: 'ych', non_masculine: 'e'},
+    instrumental: {masculine: 'ym',feminine: 'ą',neuter: 'ym', masculine_personal: 'ymi', non_masculine: 'ymi'},
+    locative: {masculine: 'ym',feminine: 'ej',neuter: 'ym', masculine_personal: 'ych', non_masculine: 'ych'},
+    vocative: {masculine: 'y',feminine: 'a',neuter: 'e', non_masculine: 'e'}}
+
+  GRAMMAR_SUBSTITUTIONS = [{from: "iy", to: "i"},
+    {from: "gia", to: "ga"},
+    {from: "gią", to: "gą"}
+  ]
+
+  def self.validate_ordinal(number, options)
+    if options[:gender] && !GENDERS.include?(options[:gender])
+      raise ArgumentError, "Unknown :gender option '#{options[:gender].inspect}'." +
+          " Choose one from: #{GENDERS.inspect}"
+    end
+
+    if options[:grammatical_case] && !CASES.include?(options[:grammatical_case])
+      raise ArgumentError, "Unknown :grammatical_case option '#{options[:grammatical_case].inspect}'." +
+          " Choose one from: #{CASES.inspect}"
+    end
+
+    if options[:gender] == :masculine_personal && (options[:grammatical_case] == :nominative || options[:grammatical_case] == :vocative) && ((0..4).include? number) == false
+      raise ArgumentError, 'for masculine personal gender and nominative/vocative case, number should be in 0..4 range'
+    end
+
+    unless (0..99).include? number
+      raise ArgumentError, 'for ordinal type number should be in 0..999999999 range'
+    end
+
+    options
+  end
+
+  def self.translate_ordinal(number, options={grammatical_case: :nominative, gender: :masculine})
+    options = validate_ordinal(number, options)
+
+    if options[:gender] == :masculine_personal && (options[:grammatical_case] == :nominative || options[:grammatical_case] == :vocative)
+      return ORDINAL_MASCULINE_PERSONAL_EXCEPTION[number]
+    end
+
+    tens_digit = ((number.to_i / 10) % 10)
+    unit_digit = (number.to_i % 10)
+
+    if number < 20
+      final_ordinal = ORDINAL_TEENS_CORES[number] + ORDINAL_FLEX[options[:grammatical_case]][options[:gender]]
+    else
+      begining_of_final_ordinal = ORDINAL_TENS_CORES[tens_digit] + ORDINAL_FLEX[options[:grammatical_case]][options[:gender]]
+      if unit_digit == 0
+        final_ordinal = begining_of_final_ordinal
+      else
+        final_ordinal = begining_of_final_ordinal + " " +
+            ORDINAL_TEENS_CORES[unit_digit] + ORDINAL_FLEX[options[:grammatical_case]][options[:gender]]
+      end
+    end
+    GRAMMAR_SUBSTITUTIONS.each { |subst|
+      final_ordinal.sub!(subst[:from], subst[:to]);
+    }
+    return final_ordinal
+  end
 
   def self.validate(number, options)
     if options[:currency] && !CURRENCIES.has_key?(options[:currency])
